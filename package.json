@@ -11,16 +11,23 @@
   },
   "dependencies": {
     "@bam.tech/react-native-image-resizer": "^3.0.11",
+    "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native/new-app-screen": "0.82.1",
     "@react-navigation/native": "^7.1.18",
     "@react-navigation/stack": "^7.5.0",
     "react": "19.1.1",
     "react-native": "0.82.1",
+    "react-native-canvas": "^0.1.40",
+    "react-native-fs": "^2.20.0",
     "react-native-gesture-handler": "^2.29.0",
+    "react-native-image-marker": "^1.2.6",
     "react-native-image-picker": "^8.2.1",
+    "react-native-image-zoom-viewer": "^3.0.1",
     "react-native-permissions": "^5.4.2",
+    "react-native-photo-manipulator": "^1.9.2",
     "react-native-safe-area-context": "^5.6.1",
-    "react-native-screens": "^4.18.0"
+    "react-native-screens": "^4.18.0",
+    "react-native-view-shot": "^4.0.3"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,18 +10,69 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
-import { takePhotoAndConvert } from '../../utils/imageUtils';
+import { takePhotoAndConvert, takePhotoWithWatermark } from '../../utils/imageUtils';
+import {
+  saveSpecimenReceipts,
+  loadSpecimenReceipts,
+  clearSpecimenReceipts,
+  hasStoredSpecimens
+} from '../../utils/storageUtils';
+import SpecimenPreviewModal from './components/SpecimenPreviewModal';
+import ImagePreviewModal from '../../components/ImagePreviewModal';
+import WatermarkImage from '../../components/WatermarkImage';
 
 const ReceiptApproverScreen = ({ navigation }) => {
   const [customerReceipt, setCustomerReceipt] = useState(null);
   const [specimenReceipts, setSpecimenReceipts] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingStorage, setIsLoadingStorage] = useState(true);
+  const [previewModalVisible, setPreviewModalVisible] = useState(false);
+  const [selectedSpecimen, setSelectedSpecimen] = useState(null);
+  const [selectedSpecimenIndex, setSelectedSpecimenIndex] = useState(0);
+  const [customerPreviewModalVisible, setCustomerPreviewModalVisible] = useState(false);
+  const [randomId, setRandomId] = useState(null);
+  const [showWatermark, setShowWatermark] = useState(false);
+  const [watermarkImageUri, setWatermarkImageUri] = useState(null);
+
+  // load specimen dari storage saat component mount
+  useEffect(() => {
+    const loadStoredSpecimens = async () => {
+      try {
+        const storedSpecimens = await loadSpecimenReceipts();
+        if (storedSpecimens.length > 0) {
+          setSpecimenReceipts(storedSpecimens);
+          console.log(`Loaded ${storedSpecimens.length} specimen dari storage`);
+        }
+      } catch (error) {
+        console.error('Error loading specimens:', error);
+      } finally {
+        setIsLoadingStorage(false);
+      }
+    };
+
+    loadStoredSpecimens();
+  }, []);
+
+  // auto-save specimen ke storage setiap kali ada perubahan
+  useEffect(() => {
+    if (!isLoadingStorage && specimenReceipts.length > 0) {
+      saveSpecimenReceipts(specimenReceipts);
+    }
+  }, [specimenReceipts, isLoadingStorage]);
 
   const handleTakeCustomerPhoto = async () => {
     try {
       setIsLoading(true);
-      const result = await takePhotoAndConvert();
+      const result = await takePhotoWithWatermark();
       setCustomerReceipt(result);
+      setRandomId(result.randomId);
+
+      // jika watermark gagal, coba pendekatan alternatif
+      if (!result.hasWatermark) {
+        console.log('Watermark failed, trying alternative approach');
+        setWatermarkImageUri(result.uri);
+        setShowWatermark(true);
+      }
     } catch (error) {
       console.log('Take photo error:', error);
       Alert.alert('Error', `Gagal mengambil foto: ${error.message}`);
@@ -45,6 +96,52 @@ const ReceiptApproverScreen = ({ navigation }) => {
 
   const handleRemoveSpecimen = (index) => {
     setSpecimenReceipts(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const handleClearAllSpecimens = async () => {
+    Alert.alert(
+      'Konfirmasi',
+      'Apakah Anda yakin ingin menghapus semua specimen yang tersimpan?',
+      [
+        {
+          text: 'Batal',
+          style: 'cancel',
+        },
+        {
+          text: 'Hapus',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await clearSpecimenReceipts();
+              setSpecimenReceipts([]);
+            } catch (error) {
+              console.error('Error clearing specimens:', error);
+              Alert.alert('Error', 'Gagal menghapus specimen');
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleSpecimenPress = (specimen, index) => {
+    setSelectedSpecimen(specimen);
+    setSelectedSpecimenIndex(index);
+    setPreviewModalVisible(true);
+  };
+
+  const handleClosePreview = () => {
+    setPreviewModalVisible(false);
+    setSelectedSpecimen(null);
+    setSelectedSpecimenIndex(0);
+  };
+
+  const handleCustomerImagePress = () => {
+    setCustomerPreviewModalVisible(true);
+  };
+
+  const handleCloseCustomerPreview = () => {
+    setCustomerPreviewModalVisible(false);
   };
 
   const handleProcessApproval = () => {
@@ -73,37 +170,58 @@ const ReceiptApproverScreen = ({ navigation }) => {
 
   const handleRetakeCustomerPhoto = () => {
     setCustomerReceipt(null);
+    setRandomId(null);
+    setShowWatermark(false);
+    setWatermarkImageUri(null);
+  };
+
+  const handleWatermarkCapture = (watermarkedUri) => {
+    if (watermarkedUri) {
+      console.log('Watermark captured successfully:', watermarkedUri);
+      setCustomerReceipt(prev => ({
+        ...prev,
+        uri: watermarkedUri,
+        hasWatermark: true
+      }));
+    }
+    setShowWatermark(false);
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView style={styles.content}>
-        <Text style={styles.title}>Receipt Approver</Text>
-        <Text style={styles.subtitle}>
-          Bandingkan receipt customer dengan specimen untuk approval
-        </Text>
+
+
 
         {/* Customer Receipt Section */}
-        <View style={styles.section}>
+        <View style={styles.firstSection}>
           <Text style={styles.sectionTitle}>Receipt Customer</Text>
           <Text style={styles.sectionSubtitle}>
             Receipt yang akan di-approve
           </Text>
-          
+
           <View style={styles.imageContainer}>
             {customerReceipt ? (
               <View style={styles.imagePreview}>
-                <Image source={{ uri: customerReceipt.uri }} style={styles.image} />
-                <TouchableOpacity 
-                  style={styles.retakeButton} 
+                <TouchableOpacity
+                  onPress={handleCustomerImagePress}
+                  style={styles.imageContainer}
+                >
+                  <Image source={{ uri: customerReceipt.uri }} style={styles.image} />
+                  <View style={styles.zoomOverlay}>
+                    <Text style={styles.zoomIcon}>🔍</Text>
+                  </View>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.retakeButton}
                   onPress={handleRetakeCustomerPhoto}
                 >
                   <Text style={styles.retakeButtonText}>Ambil Ulang</Text>
                 </TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity 
-                style={styles.cameraButton} 
+              <TouchableOpacity
+                style={styles.cameraButton}
                 onPress={handleTakeCustomerPhoto}
                 disabled={isLoading}
               >
@@ -123,53 +241,109 @@ const ReceiptApproverScreen = ({ navigation }) => {
         {/* Specimen Receipts Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <View>
+            <View style={styles.sectionTitleContainer}>
               <Text style={styles.sectionTitle}>Receipt Specimen</Text>
               <Text style={styles.sectionSubtitle}>
                 Receipt untuk perbandingan ({specimenReceipts.length} item)
+                {isLoadingStorage && ' - Loading...'}
+                {!isLoadingStorage && specimenReceipts.length > 0 && ' - Tersimpan'}
               </Text>
             </View>
-            <TouchableOpacity 
-              style={styles.addButton} 
-              onPress={handleTakeSpecimenPhoto}
-              disabled={isLoading}
-            >
-              <Text style={styles.addButtonText}>+ Tambah</Text>
-            </TouchableOpacity>
+            <View style={styles.headerButtons}>
+              {specimenReceipts.length > 0 && (
+                <TouchableOpacity
+                  style={styles.clearButton}
+                  onPress={handleClearAllSpecimens}
+                >
+                  <Text style={styles.clearButtonText}>Clear</Text>
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity
+                style={styles.addButton}
+                onPress={handleTakeSpecimenPhoto}
+                disabled={isLoading}
+              >
+                <Text style={styles.addButtonText}>+ Tambah</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={styles.specimenContainer}>
-            {specimenReceipts.map((specimen, index) => (
-              <View key={index} style={styles.specimenItem}>
-                <Image source={{ uri: specimen.uri }} style={styles.specimenImage} />
-                <TouchableOpacity 
-                  style={styles.removeButton} 
-                  onPress={() => handleRemoveSpecimen(index)}
-                >
-                  <Text style={styles.removeButtonText}>×</Text>
-                </TouchableOpacity>
+            {isLoadingStorage ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="small" color="#4F46E5" />
+                <Text style={styles.loadingText}>Loading specimen...</Text>
               </View>
-            ))}
-            
-            {specimenReceipts.length === 0 && (
-              <View style={styles.emptySpecimen}>
-                <Text style={styles.emptyText}>Belum ada specimen</Text>
-                <Text style={styles.emptySubtext}>Tap tombol + untuk menambah</Text>
-              </View>
+            ) : (
+              <>
+                {specimenReceipts.map((specimen, index) => (
+                  <View key={index} style={styles.specimenItem}>
+                    <TouchableOpacity
+                      onPress={() => handleSpecimenPress(specimen, index)}
+                      style={styles.specimenImageContainer}
+                    >
+                      <Image source={{ uri: specimen.uri }} style={styles.specimenImage} />
+                      <View style={styles.zoomOverlay}>
+                        <Text style={styles.zoomIcon}>🔍</Text>
+                      </View>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.removeButton}
+                      onPress={() => handleRemoveSpecimen(index)}
+                    >
+                      <Text style={styles.removeButtonText}>×</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+
+                {specimenReceipts.length === 0 && (
+                  <View style={styles.emptySpecimen}>
+                    <Text style={styles.emptyText}>Belum ada specimen</Text>
+                    <Text style={styles.emptySubtext}>Tap tombol + untuk menambah</Text>
+                    <Text style={styles.emptySubtext}>Specimen akan tersimpan otomatis</Text>
+                  </View>
+                )}
+              </>
             )}
           </View>
         </View>
 
         {/* Process Button */}
         {(customerReceipt && specimenReceipts.length > 0) && (
-          <TouchableOpacity 
-            style={styles.processButton} 
+          <TouchableOpacity
+            style={styles.processButton}
             onPress={handleProcessApproval}
           >
             <Text style={styles.processButtonText}>Proses Approval</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
+
+      {/* Specimen Preview Modal */}
+      <SpecimenPreviewModal
+        visible={previewModalVisible}
+        onClose={handleClosePreview}
+        specimen={selectedSpecimen}
+        index={selectedSpecimenIndex}
+        totalCount={specimenReceipts.length}
+      />
+
+      {/* Customer Receipt Preview Modal */}
+      <ImagePreviewModal
+        visible={customerPreviewModalVisible}
+        onClose={handleCloseCustomerPreview}
+        imageUri={customerReceipt?.uri}
+        title="Preview Receipt Customer"
+      />
+
+      {/* Watermark Component */}
+      {showWatermark && watermarkImageUri && (
+        <WatermarkImage
+          imageUri={watermarkImageUri}
+          watermarkText={randomId}
+          onCapture={handleWatermarkCapture}
+        />
+      )}
     </SafeAreaView>
   );
 };
@@ -194,17 +368,43 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#6b7280',
     textAlign: 'center',
-    marginBottom: 30,
+    marginBottom: 20,
     lineHeight: 22,
   },
+  infoBox: {
+    backgroundColor: '#f0f9ff',
+    borderRadius: 8,
+    padding: 12,
+    marginBottom: 20,
+    borderLeftWidth: 4,
+    borderLeftColor: '#0ea5e9',
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#0369a1',
+    textAlign: 'center',
+    lineHeight: 20,
+  },
   section: {
+    marginBottom: 30,
+  },
+  firstSection: {
     marginBottom: 30,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 16,
+  },
+  sectionTitleContainer: {
+    flex: 1,
+    marginRight: 12,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    gap: 6,
+    flexShrink: 1,
   },
   sectionTitle: {
     fontSize: 18,
@@ -268,22 +468,72 @@ const styles = StyleSheet.create({
   },
   addButton: {
     backgroundColor: '#4F46E5',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
     borderRadius: 6,
   },
   addButtonText: {
     color: '#ffffff',
     fontWeight: '600',
-    fontSize: 12,
+    fontSize: 11,
+  },
+  clearButton: {
+    backgroundColor: '#ef4444',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  clearButtonText: {
+    color: '#ffffff',
+    fontWeight: '600',
+    fontSize: 11,
   },
   specimenContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 12,
   },
+  loadingContainer: {
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    padding: 40,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#e5e7eb',
+    borderStyle: 'dashed',
+    width: '100%',
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#6b7280',
+    marginTop: 8,
+  },
   specimenItem: {
     position: 'relative',
+  },
+  specimenImageContainer: {
+    position: 'relative',
+  },
+  specimenImage: {
+    width: 100,
+    height: 80,
+    borderRadius: 8,
+  },
+  zoomOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    opacity: 0,
+  },
+  zoomIcon: {
+    fontSize: 20,
+    color: '#ffffff',
   },
   specimenImage: {
     width: 100,

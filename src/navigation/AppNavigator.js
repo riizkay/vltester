@@ -6,6 +6,7 @@ import HomeScreen from '../screens/home';
 import KtpOcrScreen from '../screens/ktp-ocr';
 import ReceiptApproverScreen from '../screens/receipt-approver';
 import ResultScreen from '../screens/result';
+import SettingsScreen from '../screens/settings';
 
 const Stack = createStackNavigator();
 
@@ -24,25 +25,30 @@ const AppNavigator = () => {
           },
         }}
       >
-        <Stack.Screen 
-          name="Home" 
-          component={HomeScreen} 
+        <Stack.Screen
+          name="Home"
+          component={HomeScreen}
           options={{ title: 'VL Tester' }}
         />
-        <Stack.Screen 
-          name="KtpOcr" 
-          component={KtpOcrScreen} 
+        <Stack.Screen
+          name="KtpOcr"
+          component={KtpOcrScreen}
           options={{ title: 'KTP OCR' }}
         />
-        <Stack.Screen 
-          name="ReceiptApprover" 
-          component={ReceiptApproverScreen} 
+        <Stack.Screen
+          name="ReceiptApprover"
+          component={ReceiptApproverScreen}
           options={{ title: 'Receipt Approver' }}
         />
-        <Stack.Screen 
-          name="Result" 
-          component={ResultScreen} 
+        <Stack.Screen
+          name="Result"
+          component={ResultScreen}
           options={{ title: 'Hasil' }}
+        />
+        <Stack.Screen
+          name="Settings"
+          component={SettingsScreen}
+          options={{ title: 'Pengaturan' }}
         />
       </Stack.Navigator>
     </NavigationContainer>

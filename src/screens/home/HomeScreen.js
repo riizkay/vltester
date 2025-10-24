@@ -16,15 +16,27 @@ const HomeScreen = ({ navigation }) => {
     navigation.navigate('KtpOcr');
   };
 
+  const handleSettings = () => {
+    navigation.navigate('Settings');
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
-        <Text style={styles.title}>VL Tester</Text>
+        <View style={styles.header}>
+          <Text style={styles.title}>VL Tester</Text>
+          <TouchableOpacity
+            style={styles.settingsButton}
+            onPress={handleSettings}
+          >
+            <Text style={styles.settingsIcon}>⚙️</Text>
+          </TouchableOpacity>
+        </View>
         <Text style={styles.subtitle}>Pilih menu yang ingin digunakan</Text>
-        
+
         <View style={styles.menuContainer}>
-          <TouchableOpacity 
-            style={styles.menuButton} 
+          <TouchableOpacity
+            style={styles.menuButton}
             onPress={handleReceiptApprover}
           >
             <Text style={styles.menuIcon}>📄</Text>
@@ -34,8 +46,8 @@ const HomeScreen = ({ navigation }) => {
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={styles.menuButton} 
+          <TouchableOpacity
+            style={styles.menuButton}
             onPress={handleKtpOcr}
           >
             <Text style={styles.menuIcon}>🆔</Text>
@@ -60,12 +72,26 @@ const styles = StyleSheet.create({
     padding: 20,
     justifyContent: 'center',
   },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
     color: '#1f2937',
+    flex: 1,
     textAlign: 'center',
-    marginBottom: 8,
+  },
+  settingsButton: {
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: '#f3f4f6',
+  },
+  settingsIcon: {
+    fontSize: 24,
   },
   subtitle: {
     fontSize: 16,

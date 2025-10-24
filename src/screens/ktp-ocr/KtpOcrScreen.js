@@ -10,10 +10,12 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { takePhotoAndConvert } from '../../utils/imageUtils';
+import ImagePreviewModal from '../../components/ImagePreviewModal';
 
 const KtpOcrScreen = ({ navigation }) => {
   const [imageData, setImageData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [previewModalVisible, setPreviewModalVisible] = useState(false);
 
   const handleTakePhoto = async () => {
     try {
@@ -50,6 +52,14 @@ const KtpOcrScreen = ({ navigation }) => {
     setImageData(null);
   };
 
+  const handleImagePress = () => {
+    setPreviewModalVisible(true);
+  };
+
+  const handleClosePreview = () => {
+    setPreviewModalVisible(false);
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
@@ -61,17 +71,25 @@ const KtpOcrScreen = ({ navigation }) => {
         <View style={styles.imageContainer}>
           {imageData ? (
             <View style={styles.imagePreview}>
-              <Image source={{ uri: imageData.uri }} style={styles.image} />
-              <TouchableOpacity 
-                style={styles.retakeButton} 
+              <TouchableOpacity
+                onPress={handleImagePress}
+                style={styles.imageContainer}
+              >
+                <Image source={{ uri: imageData.uri }} style={styles.image} />
+                <View style={styles.zoomOverlay}>
+                  <Text style={styles.zoomIcon}>🔍</Text>
+                </View>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.retakeButton}
                 onPress={handleRetakePhoto}
               >
                 <Text style={styles.retakeButtonText}>Ambil Ulang</Text>
               </TouchableOpacity>
             </View>
           ) : (
-            <TouchableOpacity 
-              style={styles.cameraButton} 
+            <TouchableOpacity
+              style={styles.cameraButton}
               onPress={handleTakePhoto}
               disabled={isLoading}
             >
@@ -88,14 +106,22 @@ const KtpOcrScreen = ({ navigation }) => {
         </View>
 
         {imageData && (
-          <TouchableOpacity 
-            style={styles.processButton} 
+          <TouchableOpacity
+            style={styles.processButton}
             onPress={handleProcessOcr}
           >
             <Text style={styles.processButtonText}>Proses OCR</Text>
           </TouchableOpacity>
         )}
       </View>
+
+      {/* Image Preview Modal */}
+      <ImagePreviewModal
+        visible={previewModalVisible}
+        onClose={handleClosePreview}
+        imageUri={imageData?.uri}
+        title="Preview KTP"
+      />
     </SafeAreaView>
   );
 };
@@ -163,6 +189,22 @@ const styles = StyleSheet.create({
     height: 200,
     borderRadius: 12,
     marginBottom: 20,
+  },
+  zoomOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.3)',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    opacity: 0,
+  },
+  zoomIcon: {
+    fontSize: 24,
+    color: '#ffffff',
   },
   retakeButton: {
     backgroundColor: '#ef4444',

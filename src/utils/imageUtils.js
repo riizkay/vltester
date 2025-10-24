@@ -2,6 +2,8 @@ import ImageResizer from '@bam.tech/react-native-image-resizer';
 import { launchImageLibrary, launchCamera, ImagePickerResponse, MediaType } from 'react-native-image-picker';
 import { CONFIG } from '../config/appConfig';
 import { Platform, PermissionsAndroid } from 'react-native';
+import { addReceiptIdToImage } from './watermarkUtils';
+import RNFS from 'react-native-fs';
 
 // konfigurasi resize image
 const MAX_SIZE = CONFIG.MAX_IMAGE_SIZE;
@@ -52,17 +54,17 @@ export const takePhoto = () => {
 
     launchCamera(imagePickerOptions, (response) => {
       console.log('Camera response:', response);
-      
+
       if (response.didCancel) {
         reject(new Error('User cancelled camera'));
         return;
       }
-      
+
       if (response.errorMessage) {
         reject(new Error(`Camera error: ${response.errorMessage}`));
         return;
       }
-      
+
       if (response.assets && response.assets[0]) {
         resolve(response.assets[0]);
       } else {
@@ -77,17 +79,17 @@ export const pickImage = () => {
   return new Promise((resolve, reject) => {
     launchImageLibrary(imagePickerOptions, (response) => {
       console.log('Gallery response:', response);
-      
+
       if (response.didCancel) {
         reject(new Error('User cancelled gallery'));
         return;
       }
-      
+
       if (response.errorMessage) {
         reject(new Error(`Gallery error: ${response.errorMessage}`));
         return;
       }
-      
+
       if (response.assets && response.assets[0]) {
         resolve(response.assets[0]);
       } else {
@@ -135,19 +137,22 @@ export const takePhotoWithBase64 = () => {
 
     launchCamera(imagePickerOptions, (response) => {
       console.log('Camera response with base64:', response);
-      
+
       if (response.didCancel) {
         reject(new Error('User cancelled camera'));
         return;
       }
-      
+
       if (response.errorMessage) {
         reject(new Error(`Camera error: ${response.errorMessage}`));
         return;
       }
-      
+
       if (response.assets && response.assets[0]) {
         const asset = response.assets[0];
+        console.log('Asset URI:', asset.uri);
+        console.log('Asset type:', asset.type);
+        console.log('Asset fileSize:', asset.fileSize);
         resolve({
           uri: asset.uri,
           base64: asset.base64, // langsung ambil base64 dari response
@@ -186,17 +191,17 @@ export const takePhotoWithOptions = (options = {}) => {
 
     launchCamera(cameraOptions, (response) => {
       console.log('Camera response with options:', response);
-      
+
       if (response.didCancel) {
         reject(new Error('User cancelled camera'));
         return;
       }
-      
+
       if (response.errorMessage) {
         reject(new Error(`Camera error: ${response.errorMessage}`));
         return;
       }
-      
+
       if (response.assets && response.assets[0]) {
         resolve(response.assets[0]);
       } else {
@@ -215,5 +220,45 @@ export const checkCameraPermission = async () => {
   } catch (error) {
     console.log('Camera permission check error:', error);
     return false;
+  }
+};
+
+// convert image URI ke base64
+export const convertImageToBase64 = async (imageUri) => {
+  try {
+    const base64 = await RNFS.readFile(imageUri, 'base64');
+    return base64;
+  } catch (error) {
+    console.error('Error converting image to base64:', error);
+    throw new Error(`Error converting image to base64: ${error.message}`);
+  }
+};
+
+// ambil foto dan tambahkan watermark dengan receipt ID
+export const takePhotoWithWatermark = async () => {
+  try {
+    console.log('Starting photo capture with watermark...');
+
+    // ambil foto terlebih dahulu
+    const photoResult = await takePhotoWithBase64();
+    console.log('Photo captured:', photoResult.uri);
+
+    // tambahkan watermark dengan receipt ID di pojok kanan bawah
+    const watermarkedResult = await addReceiptIdToImage(photoResult.uri);
+    console.log('Watermark processing completed');
+
+    // convert gambar watermarked ke base64 untuk API
+    const watermarkedBase64 = await convertImageToBase64(watermarkedResult.uri);
+    console.log('Base64 conversion completed');
+
+    return {
+      uri: watermarkedResult.uri,
+      base64: watermarkedBase64, // gunakan base64 dari gambar yang sudah di-watermark
+      randomId: watermarkedResult.randomId,
+      hasWatermark: watermarkedResult.hasWatermark
+    };
+  } catch (error) {
+    console.error('Error in takePhotoWithWatermark:', error);
+    throw error;
   }
 };
