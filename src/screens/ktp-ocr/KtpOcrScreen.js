@@ -9,7 +9,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
-import { takePhotoAndConvert } from '../../utils/imageUtils';
+import { takePhotoWithBase64 } from '../../utils/imageUtils';
 import ImagePreviewModal from '../../components/ImagePreviewModal';
 
 const KtpOcrScreen = ({ navigation }) => {
@@ -20,8 +20,14 @@ const KtpOcrScreen = ({ navigation }) => {
   const handleTakePhoto = async () => {
     try {
       setIsLoading(true);
-      const result = await takePhotoAndConvert();
+      const result = await takePhotoWithBase64();
       setImageData(result);
+
+      // log info kompresi untuk debugging
+      if (result.compressionInfo) {
+        console.log('Compression info:', result.compressionInfo);
+        console.log(`File size reduced by ${result.compressionInfo.compressionRatio}%`);
+      }
     } catch (error) {
       console.log('Take photo error:', error);
       Alert.alert('Error', `Gagal mengambil foto: ${error.message}`);
@@ -41,8 +47,8 @@ const KtpOcrScreen = ({ navigation }) => {
       type: 'ktp_ocr',
       data: {
         input: {
-          subject: 'ktp_ocr',
-          image: imageData.base64,
+          subject: 'extract_ktp_structured',
+          base64_image: imageData.base64,
         },
       },
     });

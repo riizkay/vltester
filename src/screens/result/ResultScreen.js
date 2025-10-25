@@ -9,6 +9,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import Clipboard from '@react-native-clipboard/clipboard';
 import { CONFIG } from '../../config/appConfig';
 
 const ResultScreen = ({ route, navigation }) => {
@@ -26,7 +27,7 @@ const ResultScreen = ({ route, navigation }) => {
   const processApiCall = async () => {
     setIsLoading(true);
     setError(null);
-    
+
     try {
       // simulasi API call - ganti dengan URL API yang sebenarnya
       const response = await fetch(CONFIG.API_ENDPOINT, {
@@ -62,6 +63,14 @@ const ResultScreen = ({ route, navigation }) => {
 
   const handleBackToHome = () => {
     navigation.navigate('Home');
+  };
+
+  const handleCopyJson = () => {
+    if (result) {
+      const jsonString = formatJson(result);
+      Clipboard.setString(jsonString);
+      Alert.alert('Berhasil', 'JSON berhasil di-copy ke clipboard');
+    }
   };
 
   const formatJson = (obj) => {
@@ -116,7 +125,15 @@ const ResultScreen = ({ route, navigation }) => {
         {result && !isLoading && (
           <ScrollView style={styles.resultContainer}>
             <View style={styles.jsonContainer}>
-              <Text style={styles.jsonTitle}>Response JSON:</Text>
+              <View style={styles.jsonHeader}>
+                <Text style={styles.jsonTitle}>Response JSON:</Text>
+                <TouchableOpacity
+                  style={styles.copyButton}
+                  onPress={handleCopyJson}
+                >
+                  <Text style={styles.copyButtonText}>📋 Copy</Text>
+                </TouchableOpacity>
+              </View>
               <ScrollView horizontal showsHorizontalScrollIndicator={false}>
                 <Text style={styles.jsonText}>{formatJson(result)}</Text>
               </ScrollView>
@@ -125,8 +142,8 @@ const ResultScreen = ({ route, navigation }) => {
         )}
 
         <View style={styles.buttonContainer}>
-          <TouchableOpacity 
-            style={styles.backButton} 
+          <TouchableOpacity
+            style={styles.backButton}
             onPress={handleBackToHome}
           >
             <Text style={styles.backButtonText}>Kembali ke Home</Text>
@@ -217,11 +234,27 @@ const styles = StyleSheet.create({
     shadowRadius: 3.84,
     elevation: 5,
   },
+  jsonHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
   jsonTitle: {
     fontSize: 16,
     fontWeight: '600',
     color: '#1f2937',
-    marginBottom: 12,
+  },
+  copyButton: {
+    backgroundColor: '#4F46E5',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  copyButtonText: {
+    color: '#ffffff',
+    fontSize: 12,
+    fontWeight: '600',
   },
   jsonText: {
     fontSize: 12,

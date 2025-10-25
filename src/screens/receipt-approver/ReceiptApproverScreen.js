@@ -175,14 +175,31 @@ const ReceiptApproverScreen = ({ navigation }) => {
     setWatermarkImageUri(null);
   };
 
-  const handleWatermarkCapture = (watermarkedUri) => {
+  const handleWatermarkCapture = async (watermarkedUri) => {
     if (watermarkedUri) {
       console.log('Watermark captured successfully:', watermarkedUri);
-      setCustomerReceipt(prev => ({
-        ...prev,
-        uri: watermarkedUri,
-        hasWatermark: true
-      }));
+
+      try {
+        // import convertImageToBase64 untuk convert watermarked image ke base64
+        const { convertImageToBase64 } = require('../../utils/imageUtils');
+        const watermarkedBase64 = await convertImageToBase64(watermarkedUri);
+        console.log('Watermarked image converted to base64');
+
+        setCustomerReceipt(prev => ({
+          ...prev,
+          uri: watermarkedUri,
+          base64: watermarkedBase64, // update base64 dengan yang sudah ada watermark
+          hasWatermark: true
+        }));
+      } catch (error) {
+        console.error('Error converting watermarked image to base64:', error);
+        // fallback: tetap update URI saja
+        setCustomerReceipt(prev => ({
+          ...prev,
+          uri: watermarkedUri,
+          hasWatermark: true
+        }));
+      }
     }
     setShowWatermark(false);
   };

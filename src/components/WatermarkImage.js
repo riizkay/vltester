@@ -5,6 +5,31 @@ import ViewShot from 'react-native-view-shot';
 const WatermarkImage = ({ imageUri, watermarkText, onCapture }) => {
     const viewShotRef = React.useRef(null);
     const [imageLoaded, setImageLoaded] = React.useState(false);
+    const [imageDimensions, setImageDimensions] = React.useState({ width: 800, height: 600 });
+
+    // ambil dimensi image asli
+    React.useEffect(() => {
+        if (imageUri) {
+            Image.getSize(
+                imageUri,
+                (width, height) => {
+                    console.log('Image dimensions:', { width, height });
+                    // max width 800px untuk hasil yang compact tapi tetap bagus
+                    const maxWidth = 800;
+                    const aspectRatio = height / width;
+                    const finalWidth = Math.min(width, maxWidth);
+                    const finalHeight = finalWidth * aspectRatio;
+
+                    setImageDimensions({ width: finalWidth, height: finalHeight });
+                },
+                (error) => {
+                    console.error('Error getting image size:', error);
+                    // fallback ke ukuran default
+                    setImageDimensions({ width: 800, height: 600 });
+                }
+            );
+        }
+    }, [imageUri]);
 
     React.useLayoutEffect(() => {
         if (imageUri && watermarkText && onCapture && imageLoaded) {
@@ -53,7 +78,10 @@ const WatermarkImage = ({ imageUri, watermarkText, onCapture }) => {
                     quality: 0.9,
                     fileName: `watermarked_${Date.now()}`
                 }}
-                style={styles.container}
+                style={[styles.container, {
+                    width: imageDimensions.width,
+                    height: imageDimensions.height
+                }]}
             >
                 <Image
                     source={{ uri: imageUri }}
@@ -68,8 +96,6 @@ const WatermarkImage = ({ imageUri, watermarkText, onCapture }) => {
     );
 };
 
-const { width, height } = Dimensions.get('window');
-
 const styles = StyleSheet.create({
     invisibleContainer: {
         position: 'absolute',
@@ -83,25 +109,22 @@ const styles = StyleSheet.create({
         overflow: 'hidden', // pastikan tidak ada overflow
     },
     container: {
-        width: width * 0.8,
-        height: height * 0.6,
-        backgroundColor: '#ffffff',
-        borderRadius: 8,
-        overflow: 'hidden',
+        position: 'relative',
+        backgroundColor: '#000000', // background hitam agar tidak ada gap putih
     },
     image: {
         width: '100%',
         height: '100%',
-        resizeMode: 'cover',
+        resizeMode: 'cover', // cover untuk compact, tidak ada gap
     },
     watermarkContainer: {
         position: 'absolute',
         bottom: 12,
         right: 12,
-        backgroundColor: 'rgba(0,0,0,0.6)',
-        paddingHorizontal: 6,
-        paddingVertical: 3,
-        borderRadius: 3,
+        backgroundColor: 'rgba(0,0,0,0.7)',
+        paddingHorizontal: 10,
+        paddingVertical: 5,
+        borderRadius: 4,
     },
     watermarkText: {
         color: '#FFFFFF',
