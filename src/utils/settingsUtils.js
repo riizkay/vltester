@@ -4,19 +4,20 @@ const SETTINGS_STORAGE_KEY = 'app_settings';
 
 // default settings - optimized untuk quality seperti WhatsApp
 const DEFAULT_SETTINGS = {
-    MAX_IMAGE_SIZE: 1024, // ukuran lebih besar agar detail tetap bagus
-    IMAGE_QUALITY: 87, // sweet spot untuk JPEG - balance optimal antara kualitas dan ukuran
     IMAGE_FORMAT: 'JPEG',
     API_ENDPOINT: 'https://quwe0f17qz90w2-3000.proxy.runpod.net/runSync',
     API_TIMEOUT: 1.5 * 60 * 1000,
 
-    // konfigurasi kompresi optimal seperti WhatsApp
-    COMPRESSION_LIGHT_QUALITY: 0.8, // untuk gambar kecil (< 1MB)
-    COMPRESSION_MEDIUM_QUALITY: 0.7, // untuk gambar medium (1-5MB)
-    COMPRESSION_AGGRESSIVE_QUALITY: 0.6, // untuk gambar besar (> 5MB)
-    COMPRESSION_MAX_WIDTH: 1024,
-    COMPRESSION_MAX_HEIGHT: 1024,
+    // konfigurasi kompresi umum - satu quality untuk semua
+    COMPRESSION_QUALITY: 0.8, // quality untuk semua jenis gambar
+    COMPRESSION_MAX_WIDTH: 1024, // max width kompresi
+    COMPRESSION_MAX_HEIGHT: 1024, // max height kompresi
     COMPRESSION_KEEP_META: false, // preserve EXIF untuk orientation
+
+    // konfigurasi kompresi khusus untuk KTP OCR - quality lebih tinggi untuk akurasi OCR
+    KTP_COMPRESSION_QUALITY: 0.9, // quality lebih tinggi untuk OCR
+    KTP_COMPRESSION_MAX_WIDTH: 600, // resolusi lebih tinggi untuk detail KTP
+    KTP_COMPRESSION_MAX_HEIGHT: 600,
 };
 
 // simpan settings ke local storage
@@ -65,14 +66,6 @@ export const resetSettings = async () => {
 export const validateSettings = (settings) => {
     const errors = {};
 
-    if (!settings.MAX_IMAGE_SIZE || settings.MAX_IMAGE_SIZE < 100 || settings.MAX_IMAGE_SIZE > 3840) {
-        errors.MAX_IMAGE_SIZE = 'Ukuran gambar harus antara 100-3840 pixel (optimal: 1280-1920)';
-    }
-
-    if (!settings.IMAGE_QUALITY || settings.IMAGE_QUALITY < 10 || settings.IMAGE_QUALITY > 95) {
-        errors.IMAGE_QUALITY = 'Kualitas gambar harus antara 10-95 (optimal: 85-92)';
-    }
-
     if (!settings.IMAGE_FORMAT || !['JPEG', 'PNG'].includes(settings.IMAGE_FORMAT)) {
         errors.IMAGE_FORMAT = 'Format gambar harus JPEG atau PNG';
     }
@@ -86,16 +79,8 @@ export const validateSettings = (settings) => {
     }
 
     // validasi konfigurasi kompresi
-    if (!settings.COMPRESSION_LIGHT_QUALITY || settings.COMPRESSION_LIGHT_QUALITY < 0.1 || settings.COMPRESSION_LIGHT_QUALITY > 1.0) {
-        errors.COMPRESSION_LIGHT_QUALITY = 'Kualitas kompresi ringan harus antara 0.1-1.0';
-    }
-
-    if (!settings.COMPRESSION_MEDIUM_QUALITY || settings.COMPRESSION_MEDIUM_QUALITY < 0.1 || settings.COMPRESSION_MEDIUM_QUALITY > 1.0) {
-        errors.COMPRESSION_MEDIUM_QUALITY = 'Kualitas kompresi sedang harus antara 0.1-1.0';
-    }
-
-    if (!settings.COMPRESSION_AGGRESSIVE_QUALITY || settings.COMPRESSION_AGGRESSIVE_QUALITY < 0.1 || settings.COMPRESSION_AGGRESSIVE_QUALITY > 1.0) {
-        errors.COMPRESSION_AGGRESSIVE_QUALITY = 'Kualitas kompresi agresif harus antara 0.1-1.0';
+    if (!settings.COMPRESSION_QUALITY || settings.COMPRESSION_QUALITY < 0.1 || settings.COMPRESSION_QUALITY > 1.0) {
+        errors.COMPRESSION_QUALITY = 'Kualitas kompresi harus antara 0.1-1.0';
     }
 
     if (!settings.COMPRESSION_MAX_WIDTH || settings.COMPRESSION_MAX_WIDTH < 100 || settings.COMPRESSION_MAX_WIDTH > 3840) {
@@ -104,6 +89,19 @@ export const validateSettings = (settings) => {
 
     if (!settings.COMPRESSION_MAX_HEIGHT || settings.COMPRESSION_MAX_HEIGHT < 100 || settings.COMPRESSION_MAX_HEIGHT > 3840) {
         errors.COMPRESSION_MAX_HEIGHT = 'Max height kompresi harus antara 100-3840 pixel';
+    }
+
+    // validasi konfigurasi kompresi KTP
+    if (!settings.KTP_COMPRESSION_QUALITY || settings.KTP_COMPRESSION_QUALITY < 0.1 || settings.KTP_COMPRESSION_QUALITY > 1.0) {
+        errors.KTP_COMPRESSION_QUALITY = 'Kualitas kompresi KTP harus antara 0.1-1.0';
+    }
+
+    if (!settings.KTP_COMPRESSION_MAX_WIDTH || settings.KTP_COMPRESSION_MAX_WIDTH < 100 || settings.KTP_COMPRESSION_MAX_WIDTH > 3840) {
+        errors.KTP_COMPRESSION_MAX_WIDTH = 'Max width kompresi KTP harus antara 100-3840 pixel';
+    }
+
+    if (!settings.KTP_COMPRESSION_MAX_HEIGHT || settings.KTP_COMPRESSION_MAX_HEIGHT < 100 || settings.KTP_COMPRESSION_MAX_HEIGHT > 3840) {
+        errors.KTP_COMPRESSION_MAX_HEIGHT = 'Max height kompresi KTP harus antara 100-3840 pixel';
     }
 
     return {

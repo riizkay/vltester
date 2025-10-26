@@ -129,38 +129,58 @@ const SettingsScreen = ({ navigation }) => {
 
                 {/* Image Settings */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>Pengaturan Gambar</Text>
+                    <Text style={styles.sectionTitle}>Pengaturan Kompresi Gambar</Text>
+                    <Text style={styles.sectionDescription}>
+                        Konfigurasi kompresi untuk mengoptimalkan ukuran file tanpa mengurangi kualitas visual
+                    </Text>
 
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Ukuran Maksimal Gambar (pixel)</Text>
+                        <Text style={styles.label}>Kualitas (0.1 - 1.0)</Text>
+                        <Text style={styles.helper}>Rekomendasi: 0.8 untuk kualitas optimal</Text>
                         <TextInput
-                            style={[styles.input, errors.MAX_IMAGE_SIZE && styles.inputError]}
-                            value={settings.MAX_IMAGE_SIZE.toString()}
-                            onChangeText={(value) => handleInputChange('MAX_IMAGE_SIZE', parseInt(value) || 0)}
-                            keyboardType="numeric"
-                            placeholder="448"
+                            style={[styles.input, errors.COMPRESSION_QUALITY && styles.inputError]}
+                            value={settings.COMPRESSION_QUALITY.toString()}
+                            onChangeText={(value) => handleInputChange('COMPRESSION_QUALITY', parseFloat(value) || 0)}
+                            keyboardType="decimal-pad"
+                            placeholder="0.8"
                         />
-                        {errors.MAX_IMAGE_SIZE && (
-                            <Text style={styles.errorText}>{errors.MAX_IMAGE_SIZE}</Text>
+                        {errors.COMPRESSION_QUALITY && (
+                            <Text style={styles.errorText}>{errors.COMPRESSION_QUALITY}</Text>
                         )}
                     </View>
 
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Kualitas Gambar (10-100)</Text>
+                        <Text style={styles.label}>Resolusi Maksimal (Width)</Text>
+                        <Text style={styles.helper}>Lebar maksimal dalam pixel (100-3840px)</Text>
                         <TextInput
-                            style={[styles.input, errors.IMAGE_QUALITY && styles.inputError]}
-                            value={settings.IMAGE_QUALITY.toString()}
-                            onChangeText={(value) => handleInputChange('IMAGE_QUALITY', parseInt(value) || 0)}
+                            style={[styles.input, errors.COMPRESSION_MAX_WIDTH && styles.inputError]}
+                            value={settings.COMPRESSION_MAX_WIDTH.toString()}
+                            onChangeText={(value) => handleInputChange('COMPRESSION_MAX_WIDTH', parseInt(value) || 0)}
                             keyboardType="numeric"
-                            placeholder="80"
+                            placeholder="1920"
                         />
-                        {errors.IMAGE_QUALITY && (
-                            <Text style={styles.errorText}>{errors.IMAGE_QUALITY}</Text>
+                        {errors.COMPRESSION_MAX_WIDTH && (
+                            <Text style={styles.errorText}>{errors.COMPRESSION_MAX_WIDTH}</Text>
                         )}
                     </View>
 
                     <View style={styles.inputGroup}>
-                        <Text style={styles.label}>Format Gambar</Text>
+                        <Text style={styles.label}>Resolusi Maksimal (Height)</Text>
+                        <Text style={styles.helper}>Tinggi maksimal dalam pixel (100-3840px)</Text>
+                        <TextInput
+                            style={[styles.input, errors.COMPRESSION_MAX_HEIGHT && styles.inputError]}
+                            value={settings.COMPRESSION_MAX_HEIGHT.toString()}
+                            onChangeText={(value) => handleInputChange('COMPRESSION_MAX_HEIGHT', parseInt(value) || 0)}
+                            keyboardType="numeric"
+                            placeholder="1920"
+                        />
+                        {errors.COMPRESSION_MAX_HEIGHT && (
+                            <Text style={styles.errorText}>{errors.COMPRESSION_MAX_HEIGHT}</Text>
+                        )}
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Format File</Text>
                         <View style={styles.radioGroup}>
                             <TouchableOpacity
                                 style={[
@@ -191,6 +211,59 @@ const SettingsScreen = ({ navigation }) => {
                                 </Text>
                             </TouchableOpacity>
                         </View>
+                    </View>
+                </View>
+
+                {/* KTP OCR Settings */}
+                <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Pengaturan KTP OCR</Text>
+                    <Text style={styles.sectionDescription}>
+                        Konfigurasi kompresi khusus untuk KTP dengan quality lebih tinggi untuk akurasi OCR optimal
+                    </Text>
+
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Kualitas KTP (0.1 - 1.0)</Text>
+                        <Text style={styles.helper}>Rekomendasi: 0.9 untuk akurasi OCR tinggi</Text>
+                        <TextInput
+                            style={[styles.input, errors.KTP_COMPRESSION_QUALITY && styles.inputError]}
+                            value={settings.KTP_COMPRESSION_QUALITY.toString()}
+                            onChangeText={(value) => handleInputChange('KTP_COMPRESSION_QUALITY', parseFloat(value) || 0)}
+                            keyboardType="decimal-pad"
+                            placeholder="0.9"
+                        />
+                        {errors.KTP_COMPRESSION_QUALITY && (
+                            <Text style={styles.errorText}>{errors.KTP_COMPRESSION_QUALITY}</Text>
+                        )}
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Resolusi KTP (Width)</Text>
+                        <Text style={styles.helper}>Lebar maksimal untuk KTP (100-3840px)</Text>
+                        <TextInput
+                            style={[styles.input, errors.KTP_COMPRESSION_MAX_WIDTH && styles.inputError]}
+                            value={settings.KTP_COMPRESSION_MAX_WIDTH.toString()}
+                            onChangeText={(value) => handleInputChange('KTP_COMPRESSION_MAX_WIDTH', parseInt(value) || 0)}
+                            keyboardType="numeric"
+                            placeholder="2560"
+                        />
+                        {errors.KTP_COMPRESSION_MAX_WIDTH && (
+                            <Text style={styles.errorText}>{errors.KTP_COMPRESSION_MAX_WIDTH}</Text>
+                        )}
+                    </View>
+
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.label}>Resolusi KTP (Height)</Text>
+                        <Text style={styles.helper}>Tinggi maksimal untuk KTP (100-3840px)</Text>
+                        <TextInput
+                            style={[styles.input, errors.KTP_COMPRESSION_MAX_HEIGHT && styles.inputError]}
+                            value={settings.KTP_COMPRESSION_MAX_HEIGHT.toString()}
+                            onChangeText={(value) => handleInputChange('KTP_COMPRESSION_MAX_HEIGHT', parseInt(value) || 0)}
+                            keyboardType="numeric"
+                            placeholder="2560"
+                        />
+                        {errors.KTP_COMPRESSION_MAX_HEIGHT && (
+                            <Text style={styles.errorText}>{errors.KTP_COMPRESSION_MAX_HEIGHT}</Text>
+                        )}
                     </View>
                 </View>
 
@@ -304,10 +377,21 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: '600',
         color: '#1f2937',
+        marginBottom: 8,
+    },
+    sectionDescription: {
+        fontSize: 13,
+        color: '#6b7280',
         marginBottom: 16,
+        lineHeight: 18,
     },
     inputGroup: {
         marginBottom: 16,
+    },
+    helper: {
+        fontSize: 12,
+        color: '#9ca3af',
+        marginBottom: 6,
     },
     label: {
         fontSize: 14,

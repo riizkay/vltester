@@ -24,7 +24,7 @@ const HomeScreen = ({ navigation }) => {
     <SafeAreaView style={styles.container}>
       <View style={styles.content}>
         <View style={styles.header}>
-          <Text style={styles.title}>VL Tester</Text>
+          <Text style={styles.title}>POC Vison Model</Text>
           <TouchableOpacity
             style={styles.settingsButton}
             onPress={handleSettings}

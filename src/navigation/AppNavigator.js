@@ -28,7 +28,7 @@ const AppNavigator = () => {
         <Stack.Screen
           name="Home"
           component={HomeScreen}
-          options={{ title: 'VL Tester' }}
+          options={{ title: 'POC Vision Model' }}
         />
         <Stack.Screen
           name="KtpOcr"

@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
   Dimensions,
 } from 'react-native';
-import { takePhotoWithBase64 } from '../../utils/imageUtils';
+import { takePhotoWithBase64, compressImageOptimal } from '../../utils/imageUtils';
 import ImagePreviewModal from '../../components/ImagePreviewModal';
 import CameraScreen from './components/CameraScreen';
 import { processKtpImage } from '../../utils/imageCropUtils';
@@ -47,15 +47,30 @@ const KtpOcrScreen = ({ navigation }) => {
 
       console.log('Processed URI:', processedUri);
 
+      // kompresi dengan konfigurasi khusus KTP OCR
+      const settings = await loadSettings();
+      const compressedResult = await compressImageOptimal(processedUri, {
+        quality: settings.KTP_COMPRESSION_QUALITY,
+        maxWidth: settings.KTP_COMPRESSION_MAX_WIDTH,
+        maxHeight: settings.KTP_COMPRESSION_MAX_HEIGHT,
+      });
+
+      console.log('KTP image compressed:', compressedResult.uri);
+      console.log('Compression ratio:', compressedResult.compressionRatio + '%');
+
       // convert ke base64 untuk OCR
-      const base64 = await RNFS.readFile(processedUri, 'base64');
+      const base64 = await RNFS.readFile(compressedResult.uri, 'base64');
 
       console.log('Base64 length:', base64.length);
 
       setImageData({
-        uri: processedUri,
+        uri: compressedResult.uri,
         base64: base64,
-        compressionInfo: null,
+        compressionInfo: {
+          originalSize: compressedResult.originalSize,
+          compressedSize: compressedResult.compressedSize,
+          compressionRatio: compressedResult.compressionRatio
+        },
       });
     } catch (error) {
       console.log('Camera capture error:', error);

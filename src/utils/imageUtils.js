@@ -2,24 +2,22 @@
  * ImageUtils - Utility untuk handling gambar dengan kompresi optimal seperti WhatsApp
  * 
  * Fitur utama:
- * - Kompresi gambar otomatis berdasarkan ukuran file
- * - Strategi kompresi adaptif (light/medium/aggressive)
- * - Preserve EXIF metadata untuk orientation
+ * - Kompresi gambar dengan konfigurasi sederhana dan konsisten
  * - Konfigurasi dinamis dari settings
  * - Support kamera dan galeri
  * - Watermark integration
  * - Fallback ke ImageResizer jika react-native-compressor gagal
  * 
- * Strategi kompresi:
- * - Light (< 1MB): Quality 0.8, Max 1920px
- * - Medium (1-5MB): Quality 0.7, Max 1920px  
- * - Aggressive (> 5MB): Quality 0.6, Max 1920px
+ * Konfigurasi kompresi:
+ * - Quality: 0.8 (dapat diatur di settings)
+ * - Max Width: 1920px (dapat diatur di settings)
+ * - Max Height: 1920px (dapat diatur di settings)
  * 
  * Penggunaan:
  * - takePhotoWithBase64(): Ambil foto + kompresi + base64
  * - pickImageWithCompression(): Ambil dari galeri + kompresi + base64
  * - takePhotoWithWatermark(): Ambil foto + kompresi + watermark + base64
- * - compressImageOptimal(): Kompresi manual dengan strategi adaptif
+ * - compressImageOptimal(): Kompresi manual dengan konfigurasi yang dapat disesuaikan
  * 
  * Error Handling:
  * - Jika react-native-compressor gagal, otomatis fallback ke ImageResizer
@@ -29,55 +27,25 @@
 
 import ImageResizer from '@bam.tech/react-native-image-resizer';
 import { launchImageLibrary, launchCamera, ImagePickerResponse, MediaType } from 'react-native-image-picker';
-import { CONFIG } from '../config/appConfig';
 import { Platform, PermissionsAndroid } from 'react-native';
 import { addReceiptIdToImage } from './watermarkUtils';
 import RNFS from 'react-native-fs';
 import { Image } from 'react-native-compressor';
 import { loadSettings } from './settingsUtils';
 
-// konfigurasi resize image
-const MAX_SIZE = CONFIG.MAX_IMAGE_SIZE;
-
 /**
  * Optimasi Kompresi Image (mendekati quality WhatsApp):
  * 
- * 1. MAX_SIZE: 1920px (cukup besar untuk preserve detail)
- * 2. QUALITY: 87 (sweet spot JPEG - di atas 90 file size membengkak, di bawah 85 quality drop)
+ * 1. MAX_WIDTH/HEIGHT: 1920px (cukup besar untuk preserve detail)
+ * 2. QUALITY: 0.8 (sweet spot - di atas 0.9 file size membengkak, di bawah 0.7 quality drop)
  * 3. MODE: 'cover' (preserve aspect ratio tanpa distorsi)
- * 4. keepMeta: true (preserve EXIF untuk orientation)
+ * 4. keepMeta: false (tidak perlu EXIF untuk orientation)
  * 
  * Quality 100 TIDAK disarankan karena:
  * - File size sangat besar
  * - Menimbulkan artefak JPEG compression
- * - Tidak ada perbedaan visual signifikan dengan quality 87-92
+ * - Tidak ada perbedaan visual signifikan dengan quality 0.8-0.85
  */
-
-
-// fungsi untuk menentukan strategi kompresi berdasarkan ukuran file dan settings
-const getCompressionStrategy = (fileSize, settings) => {
-  const sizeInMB = fileSize / (1024 * 1024);
-
-  if (sizeInMB < 1) {
-    return {
-      quality: settings.COMPRESSION_LIGHT_QUALITY,
-      maxWidth: settings.COMPRESSION_MAX_WIDTH,
-      maxHeight: settings.COMPRESSION_MAX_HEIGHT,
-    };
-  } else if (sizeInMB < 5) {
-    return {
-      quality: settings.COMPRESSION_MEDIUM_QUALITY,
-      maxWidth: settings.COMPRESSION_MAX_WIDTH,
-      maxHeight: settings.COMPRESSION_MAX_HEIGHT,
-    };
-  } else {
-    return {
-      quality: settings.COMPRESSION_AGGRESSIVE_QUALITY,
-      maxWidth: settings.COMPRESSION_MAX_WIDTH,
-      maxHeight: settings.COMPRESSION_MAX_HEIGHT,
-    };
-  }
-};
 
 // kompresi gambar dengan react-native-compressor (optimal seperti WhatsApp)
 export const compressImageOptimal = async (imageUri, options = {}) => {
@@ -89,24 +57,19 @@ export const compressImageOptimal = async (imageUri, options = {}) => {
     const settings = await loadSettings();
     console.log('Loaded compression settings:', settings);
 
-    // cek file size untuk menentukan strategi kompresi
+    // cek file size
     const fileInfo = await RNFS.stat(imageUri);
     const fileSize = fileInfo.size;
     console.log('Original file size:', fileSize, 'bytes');
 
-    // tentukan strategi kompresi berdasarkan settings
-    const compressionStrategy = getCompressionStrategy(fileSize, settings);
-    console.log('Using compression strategy:', compressionStrategy);
-
-    // kompresi dengan react-native-compressor
+    // kompresi dengan react-native-compressor - gunakan satu quality untuk semua
     const compressedUri = await Image.compress(imageUri, {
-      quality: options.quality || compressionStrategy.quality,
-      maxWidth: options.maxWidth || compressionStrategy.maxWidth,
-      maxHeight: options.maxHeight || compressionStrategy.maxHeight,
+      quality: options.quality || settings.COMPRESSION_QUALITY,
+      maxWidth: options.maxWidth || settings.COMPRESSION_MAX_WIDTH,
+      maxHeight: options.maxHeight || settings.COMPRESSION_MAX_HEIGHT,
       input: 'uri',
-      output: 'jpg', // format output harus berupa format file, bukan 'uri'
-      returnableOutputType: 'uri', // ini yang menentukan return type
-      // preserve metadata untuk orientation dari settings
+      output: 'jpg',
+      returnableOutputType: 'uri',
       keepMeta: options.keepMeta !== undefined ? options.keepMeta : settings.COMPRESSION_KEEP_META,
     });
 
@@ -123,7 +86,6 @@ export const compressImageOptimal = async (imageUri, options = {}) => {
       originalSize: fileSize,
       compressedSize: compressedSize,
       compressionRatio: parseFloat(compressionRatio),
-      strategy: compressionStrategy
     };
 
   } catch (error) {
@@ -132,13 +94,16 @@ export const compressImageOptimal = async (imageUri, options = {}) => {
     // fallback: gunakan ImageResizer jika react-native-compressor gagal
     console.log('Falling back to ImageResizer...');
     try {
+      const fileInfo = await RNFS.stat(imageUri);
+      const fileSize = fileInfo.size;
+
       const settings = await loadSettings();
       const fallbackResult = await ImageResizer.createResizedImage(
         imageUri,
         settings.COMPRESSION_MAX_WIDTH,
         settings.COMPRESSION_MAX_HEIGHT,
         'JPEG',
-        Math.round(settings.COMPRESSION_MEDIUM_QUALITY * 100), // convert ke 0-100 scale
+        Math.round(settings.COMPRESSION_QUALITY * 100), // convert ke 0-100 scale
         0,
         undefined,
         false,
@@ -160,7 +125,6 @@ export const compressImageOptimal = async (imageUri, options = {}) => {
         originalSize: fileSize,
         compressedSize: fallbackSize,
         compressionRatio: parseFloat(fallbackRatio),
-        strategy: { quality: settings.COMPRESSION_MEDIUM_QUALITY, maxWidth: settings.COMPRESSION_MAX_WIDTH, maxHeight: settings.COMPRESSION_MAX_HEIGHT },
         isFallback: true
       };
     } catch (fallbackError) {
@@ -290,8 +254,7 @@ export const pickImageWithCompression = () => {
         compressionInfo: {
           originalSize: compressedResult.originalSize,
           compressedSize: compressedResult.compressedSize,
-          compressionRatio: compressedResult.compressionRatio,
-          strategy: compressedResult.strategy
+          compressionRatio: compressedResult.compressionRatio
         }
       });
     } catch (error) {
@@ -304,13 +267,16 @@ export const pickImageWithCompression = () => {
 // resize image dan convert ke base64 (metode lama - tidak digunakan lagi)
 export const resizeAndConvertToBase64 = async (imageUri) => {
   try {
+    // load settings untuk konfigurasi
+    const settings = await loadSettings();
+
     // resize image dengan settings optimal
     const resizedImage = await ImageResizer.createResizedImage(
       imageUri,
-      MAX_SIZE,
-      MAX_SIZE,
-      CONFIG.IMAGE_FORMAT,
-      CONFIG.IMAGE_QUALITY, // langsung pakai nilai 0-100
+      settings.COMPRESSION_MAX_WIDTH,
+      settings.COMPRESSION_MAX_HEIGHT,
+      settings.IMAGE_FORMAT,
+      Math.round(settings.COMPRESSION_QUALITY * 100), // convert ke 0-100 scale
       0,
       undefined,
       false,
@@ -379,8 +345,7 @@ export const takePhotoWithBase64 = () => {
             compressionInfo: {
               originalSize: compressedResult.originalSize,
               compressedSize: compressedResult.compressedSize,
-              compressionRatio: compressedResult.compressionRatio,
-              strategy: compressedResult.strategy
+              compressionRatio: compressedResult.compressionRatio
             }
           });
         } catch (error) {

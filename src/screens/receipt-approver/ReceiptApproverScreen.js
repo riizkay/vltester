@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
-import { takePhotoAndConvert, takePhotoWithWatermark, convertImageToBase64 } from '../../utils/imageUtils';
+import { takePhotoAndConvert, takePhotoWithWatermark, convertImageToBase64, compressImageOptimal } from '../../utils/imageUtils';
 import {
   saveSpecimenReceipts,
   loadSpecimenReceipts,
@@ -23,6 +23,7 @@ import ImageInfoModal from '../../components/ImageInfoModal';
 import WatermarkImage from '../../components/WatermarkImage';
 import SimpleCameraScreen from './components/SimpleCameraScreen';
 import RNFS from 'react-native-fs';
+import { loadSettings } from '../../utils/settingsUtils';
 
 const ReceiptApproverScreen = ({ navigation }) => {
   const [customerReceipt, setCustomerReceipt] = useState(null);
@@ -93,17 +94,33 @@ const ReceiptApproverScreen = ({ navigation }) => {
         setWatermarkImageUri(image.uri);
         setShowWatermark(true);
 
-        // simpan gambar original dulu sementara
-        setCustomerReceipt({
-          uri: image.uri,
-          base64: null,
-          hasWatermark: false,
-        });
+        // jangan set customerReceipt dulu, tunggu watermark dan kompresi selesai
       } else {
-        // untuk specimen receipt - langsung convert ke base64
-        const base64 = await RNFS.readFile(image.uri, 'base64');
+        // untuk specimen receipt - kompresi dulu kemudian convert ke base64
+        console.log('Compressing specimen receipt...');
+        const settings = await loadSettings();
+        const compressedResult = await compressImageOptimal(image.uri, {
+          quality: settings.COMPRESSION_QUALITY,
+          maxWidth: settings.COMPRESSION_MAX_WIDTH,
+          maxHeight: settings.COMPRESSION_MAX_HEIGHT,
+        });
+
+        console.log('Specimen receipt compressed:', compressedResult.uri);
+        console.log('Compression ratio:', compressedResult.compressionRatio + '%');
+        console.log('Original size:', compressedResult.originalSize, 'bytes');
+        console.log('Compressed size:', compressedResult.compressedSize, 'bytes');
+
+        // verifikasi resolusi gambar terkompresi
+        const compressedImageSize = await new Promise((resolve, reject) => {
+          Image.getSize(compressedResult.uri, (width, height) => {
+            resolve({ width, height });
+          }, reject);
+        });
+        console.log('Compressed specimen dimensions:', compressedImageSize);
+
+        const base64 = await RNFS.readFile(compressedResult.uri, 'base64');
         setSpecimenReceipts(prev => [...prev, {
-          uri: image.uri,
+          uri: compressedResult.uri,
           base64: base64,
         }]);
       }
@@ -272,29 +289,67 @@ const ReceiptApproverScreen = ({ navigation }) => {
       try {
         setIsLoading(true);
 
-        // convert watermarked image ke base64
-        const watermarkedBase64 = await RNFS.readFile(watermarkedUri, 'base64');
-        console.log('Watermarked image converted to base64, length:', watermarkedBase64.length);
+        // kompresi gambar watermarked sebelum convert ke base64
+        console.log('Compressing watermarked customer receipt...');
+        console.log('Original watermarkedUri:', watermarkedUri);
+
+        const settings = await loadSettings();
+        console.log('Compression settings:', {
+          quality: settings.COMPRESSION_QUALITY,
+          maxWidth: settings.COMPRESSION_MAX_WIDTH,
+          maxHeight: settings.COMPRESSION_MAX_HEIGHT,
+        });
+
+        const compressedResult = await compressImageOptimal(watermarkedUri, {
+          quality: settings.COMPRESSION_QUALITY,
+          maxWidth: settings.COMPRESSION_MAX_WIDTH,
+          maxHeight: settings.COMPRESSION_MAX_HEIGHT,
+        });
+
+        console.log('Watermarked receipt compressed:', compressedResult.uri);
+        console.log('Compression ratio:', compressedResult.compressionRatio + '%');
+        console.log('Original size:', compressedResult.originalSize, 'bytes');
+        console.log('Compressed size:', compressedResult.compressedSize, 'bytes');
+
+        // convert compressed watermarked image ke base64
+        const watermarkedBase64 = await RNFS.readFile(compressedResult.uri, 'base64');
+        console.log('Watermarked compressed image converted to base64, length:', watermarkedBase64.length);
+
+        // verifikasi resolusi gambar terkompresi
+        const compressedImageSize = await new Promise((resolve, reject) => {
+          Image.getSize(compressedResult.uri, (width, height) => {
+            resolve({ width, height });
+          }, reject);
+        });
+        console.log('Compressed image dimensions:', compressedImageSize);
 
         setCustomerReceipt({
-          uri: watermarkedUri,
+          uri: compressedResult.uri,
           base64: watermarkedBase64,
           hasWatermark: true
         });
 
-        console.log('Customer receipt updated with watermarked image');
+        console.log('Customer receipt updated with compressed watermarked image');
       } catch (error) {
         console.error('Error converting watermarked image to base64:', error);
 
-        // fallback: gunakan gambar original dan convert ke base64
+        // fallback: gunakan gambar original dan convert ke base64 tanpa watermark
         try {
-          const originalBase64 = await RNFS.readFile(watermarkImageUri, 'base64');
+          // kompresi gambar original sebagai fallback
+          const settings = await loadSettings();
+          const compressedOriginal = await compressImageOptimal(watermarkImageUri, {
+            quality: settings.COMPRESSION_QUALITY,
+            maxWidth: settings.COMPRESSION_MAX_WIDTH,
+            maxHeight: settings.COMPRESSION_MAX_HEIGHT,
+          });
+
+          const originalBase64 = await RNFS.readFile(compressedOriginal.uri, 'base64');
           setCustomerReceipt({
-            uri: watermarkImageUri,
+            uri: compressedOriginal.uri,
             base64: originalBase64,
             hasWatermark: false
           });
-          console.log('Fallback: using original image without watermark');
+          console.log('Fallback: using compressed original image without watermark');
         } catch (fallbackError) {
           console.error('Fallback also failed:', fallbackError);
           Alert.alert('Error', 'Gagal memproses gambar');
@@ -305,12 +360,21 @@ const ReceiptApproverScreen = ({ navigation }) => {
     } else {
       console.log('Watermark capture returned null or undefined, using original image');
 
-      // fallback: gunakan gambar original tanpa watermark
+      // fallback: gunakan gambar original dengan kompresi
       try {
         setIsLoading(true);
-        const originalBase64 = await RNFS.readFile(watermarkImageUri, 'base64');
+
+        // kompresi gambar original
+        const settings = await loadSettings();
+        const compressedOriginal = await compressImageOptimal(watermarkImageUri, {
+          quality: settings.COMPRESSION_QUALITY,
+          maxWidth: settings.COMPRESSION_MAX_WIDTH,
+          maxHeight: settings.COMPRESSION_MAX_HEIGHT,
+        });
+
+        const originalBase64 = await RNFS.readFile(compressedOriginal.uri, 'base64');
         setCustomerReceipt({
-          uri: watermarkImageUri,
+          uri: compressedOriginal.uri,
           base64: originalBase64,
           hasWatermark: false
         });
