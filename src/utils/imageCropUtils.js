@@ -1,7 +1,7 @@
 import { Image } from 'react-native';
 import { Dimensions } from 'react-native';
 import ImageResizer from '@bam.tech/react-native-image-resizer';
-import PhotoManipulator from 'react-native-photo-manipulator';
+import ImageEditor from '@react-native-community/image-editor';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
@@ -12,6 +12,10 @@ const KTP_MASK_HEIGHT = KTP_MASK_WIDTH * 0.63;
 // posisi mask di layar (center)
 const MASK_LEFT = (SCREEN_WIDTH - KTP_MASK_WIDTH) / 2;
 const MASK_TOP = (SCREEN_HEIGHT - KTP_MASK_HEIGHT) / 2;
+
+// Padding untuk crop - bisa berbeda untuk horizontal dan vertical
+const CROP_PADDING_HORIZONTAL = 0.03; // 3% gap horizontal (lebih kecil)
+const CROP_PADDING_VERTICAL = 0.05; // 5% gap vertical (lebih besar)
 
 /**
  * Crop gambar sesuai dengan area mask KTP
@@ -81,16 +85,34 @@ export const cropKtpMask = async (imageUri) => {
             const scaleX = imageInfo.height / SCREEN_WIDTH;  // swap
             const scaleY = imageInfo.width / SCREEN_HEIGHT;  // swap
 
-            cropX = Math.max(0, Math.floor(MASK_TOP * scaleX));
-            cropY = Math.max(0, Math.floor(MASK_LEFT * scaleY));
+            // Calculate base crop dimensions
+            const baseWidth = KTP_MASK_HEIGHT * scaleY;
+            const baseHeight = KTP_MASK_WIDTH * scaleX;
+
+            // Calculate padding in pixels (outset - expand outward)
+            const paddingX = baseWidth * CROP_PADDING_HORIZONTAL;
+            const paddingY = baseHeight * CROP_PADDING_VERTICAL;
+
+            // Adjust crop with padding (outset - expand outward)
+            cropX = Math.max(0, Math.floor(MASK_TOP * scaleX - paddingX)); // move left
+            cropY = Math.max(0, Math.floor(MASK_LEFT * scaleY - paddingY)); // move up
             cropWidthMask = Math.min(
                 imageInfo.width - cropX,
-                Math.floor(KTP_MASK_HEIGHT * scaleY)
+                Math.floor(baseWidth + paddingX * 2) // add padding to both sides
             );
             cropHeightMask = Math.min(
                 imageInfo.height - cropY,
-                Math.floor(KTP_MASK_WIDTH * scaleX)
+                Math.floor(baseHeight + paddingY * 2) // add padding to both sides
             );
+
+            console.log('Crop with padding (mismatched orientation):', {
+                baseWidth,
+                baseHeight,
+                paddingX,
+                paddingY,
+                finalWidth: cropWidthMask,
+                finalHeight: cropHeightMask
+            });
         } else {
             // Orientasi sama
             const scaleX = imageInfo.width / SCREEN_WIDTH;
@@ -98,22 +120,41 @@ export const cropKtpMask = async (imageUri) => {
 
             console.log('Scale factors (normal):', { scaleX, scaleY });
 
-            cropX = Math.max(0, Math.floor(MASK_LEFT * scaleX));
-            cropY = Math.max(0, Math.floor(MASK_TOP * scaleY));
+            // Calculate base crop dimensions
+            const baseWidth = KTP_MASK_WIDTH * scaleX;
+            const baseHeight = KTP_MASK_HEIGHT * scaleY;
+
+            // Calculate padding in pixels (outset - expand outward)
+            const paddingX = baseWidth * CROP_PADDING_HORIZONTAL;
+            const paddingY = baseHeight * CROP_PADDING_VERTICAL;
+
+            // Adjust crop with padding (outset - expand outward)
+            cropX = Math.max(0, Math.floor(MASK_LEFT * scaleX - paddingX)); // move left
+            cropY = Math.max(0, Math.floor(MASK_TOP * scaleY - paddingY)); // move up
             cropWidthMask = Math.min(
                 imageInfo.width - cropX,
-                Math.floor(KTP_MASK_WIDTH * scaleX)
+                Math.floor(baseWidth + paddingX * 2) // add padding to both sides
             );
             cropHeightMask = Math.min(
                 imageInfo.height - cropY,
-                Math.floor(KTP_MASK_HEIGHT * scaleY)
+                Math.floor(baseHeight + paddingY * 2) // add padding to both sides
             );
+
+            console.log('Crop with padding:', {
+                baseWidth,
+                baseHeight,
+                paddingX,
+                paddingY,
+                finalWidth: cropWidthMask,
+                finalHeight: cropHeightMask,
+                aspectRatio: cropWidthMask / cropHeightMask
+            });
 
             console.log('Expected crop result dimensions:', {
                 width: cropWidthMask,
                 height: cropHeightMask,
                 aspectRatio: cropWidthMask / cropHeightMask,
-                expectedAspectRatio: '~1.6 (KTP landscape card)'
+                expectedAspectRatio: '~1.6 (KTP landscape card with padding)'
             });
         }
 
@@ -126,20 +167,31 @@ export const cropKtpMask = async (imageUri) => {
             imageHeight: imageInfo.height,
         });
 
-        // WORKAROUND: Tidak ada library yang support offset crop dengan baik di Android
-        // Solusi: Skip crop untuk sekarang, gambar akan tetap terlihat ter-crop di preview
-        // karena menggunakan styling di Image component
+        // crop menggunakan @react-native-community/image-editor
+        console.log('Attempting crop with @react-native-community/image-editor...');
 
-        console.warn('⚠️ WARNING: Offset crop not supported by any library.');
-        console.warn('Returning original image. Image will appear cropped in preview due to styling.');
-        console.log('Crop parameters for reference:', {
-            cropX,
-            cropY,
-            cropWidth: cropWidthMask,
-            cropHeight: cropHeightMask
-        });
+        try {
+            const cropData = {
+                offset: { x: cropX, y: cropY },
+                size: { width: cropWidthMask, height: cropHeightMask },
+            };
 
-        return imageUri;
+            console.log('Crop data:', cropData);
+
+            const croppedImage = await ImageEditor.cropImage(imageUri, cropData);
+
+            console.log('Cropped image result:', croppedImage);
+
+            // Handle the result - cropImage returns an object with uri property
+            const croppedUri = typeof croppedImage === 'string' ? croppedImage : croppedImage.uri;
+
+            console.log('Cropped image URI:', croppedUri);
+            return croppedUri;
+        } catch (error) {
+            console.error('ImageEditor crop failed:', error);
+            console.warn('⚠️ WARNING: Crop failed, returning original image');
+            return imageUri;
+        }
     } catch (error) {
         console.error('Error cropping KTP image:', error);
         throw new Error(`Gagal crop gambar: ${error.message}`);

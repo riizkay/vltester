@@ -16,7 +16,6 @@ import CameraScreen from './components/CameraScreen';
 import { processKtpImage } from '../../utils/imageCropUtils';
 import RNFS from 'react-native-fs';
 import { loadSettings } from '../../utils/settingsUtils';
-import CroppedImageView from '../../components/CroppedImageView';
 
 const KtpOcrScreen = ({ navigation }) => {
   const [imageData, setImageData] = useState(null);
@@ -24,9 +23,6 @@ const KtpOcrScreen = ({ navigation }) => {
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
   const [showCamera, setShowCamera] = useState(false);
   const [infoData, setInfoData] = useState(null);
-  const [showCropper, setShowCropper] = useState(false);
-  const [originalImageUri, setOriginalImageUri] = useState(null);
-  const [cropParams, setCropParams] = useState(null);
 
   const handleTakePhoto = async () => {
     setShowCamera(true);
@@ -46,81 +42,26 @@ const KtpOcrScreen = ({ navigation }) => {
 
       console.log('Processing image URI:', image.uri);
 
-      // Get image dimensions
-      const imageSize = await new Promise((resolve, reject) => {
-        Image.getSize(image.uri, (width, height) => {
-          resolve({ width, height });
-        }, reject);
+      // crop dan process gambar sesuai mask
+      const processedUri = await processKtpImage(image.uri);
+
+      console.log('Processed URI:', processedUri);
+
+      // convert ke base64 untuk OCR
+      const base64 = await RNFS.readFile(processedUri, 'base64');
+
+      console.log('Base64 length:', base64.length);
+
+      setImageData({
+        uri: processedUri,
+        base64: base64,
+        compressionInfo: null,
       });
-
-      console.log('Original image size:', imageSize);
-
-      // Calculate crop parameters
-      const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
-      const KTP_MASK_WIDTH = SCREEN_WIDTH * 0.9;
-      const KTP_MASK_HEIGHT = KTP_MASK_WIDTH * 0.63;
-      const MASK_LEFT = (SCREEN_WIDTH - KTP_MASK_WIDTH) / 2;
-      const MASK_TOP = (SCREEN_HEIGHT - KTP_MASK_HEIGHT) / 2;
-
-      const scaleX = imageSize.width / SCREEN_WIDTH;
-      const scaleY = imageSize.height / SCREEN_HEIGHT;
-
-      const cropX = Math.max(0, Math.floor(MASK_LEFT * scaleX));
-      const cropY = Math.max(0, Math.floor(MASK_TOP * scaleY));
-      const cropWidth = Math.floor(KTP_MASK_WIDTH * scaleX);
-      const cropHeight = Math.floor(KTP_MASK_HEIGHT * scaleY);
-
-      console.log('Crop params calculated:', { cropX, cropY, cropWidth, cropHeight });
-
-      // Set crop params and show cropper
-      setOriginalImageUri(image.uri);
-      setCropParams({
-        cropX,
-        cropY,
-        cropWidth,
-        cropHeight,
-        imageWidth: imageSize.width,
-        imageHeight: imageSize.height
-      });
-      setShowCropper(true);
-      setIsLoading(false);
     } catch (error) {
       console.log('Camera capture error:', error);
       Alert.alert('Error', `Gagal memproses foto: ${error.message}`);
+    } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleCroppedImageCapture = async (croppedUri) => {
-    console.log('handleCroppedImageCapture called with URI:', croppedUri);
-
-    if (croppedUri) {
-      try {
-        setShowCropper(false);
-        setIsLoading(true);
-
-        // Process the cropped image (resize for OCR)
-        const { processKtpImage } = require('../../utils/imageCropUtils');
-        const processedUri = await processKtpImage(croppedUri);
-
-        console.log('Processed cropped URI:', processedUri);
-
-        // convert ke base64 untuk OCR
-        const base64 = await RNFS.readFile(processedUri, 'base64');
-
-        console.log('Base64 length:', base64.length);
-
-        setImageData({
-          uri: processedUri,
-          base64: base64,
-          compressionInfo: null,
-        });
-      } catch (error) {
-        console.error('Error processing cropped image:', error);
-        Alert.alert('Error', 'Gagal memproses gambar yang di-crop');
-      } finally {
-        setIsLoading(false);
-      }
     }
   };
 
@@ -262,15 +203,6 @@ const KtpOcrScreen = ({ navigation }) => {
         title="Preview KTP"
         infoData={infoData}
       />
-
-      {/* Cropped Image View - Invisible ViewShot Component */}
-      {showCropper && originalImageUri && cropParams && (
-        <CroppedImageView
-          imageUri={originalImageUri}
-          cropParams={cropParams}
-          onCapture={handleCroppedImageCapture}
-        />
-      )}
     </SafeAreaView>
   );
 };
