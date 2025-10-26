@@ -10,7 +10,7 @@ import {
   ActivityIndicator,
   ScrollView,
 } from 'react-native';
-import { takePhotoAndConvert, takePhotoWithWatermark } from '../../utils/imageUtils';
+import { takePhotoAndConvert, takePhotoWithWatermark, convertImageToBase64 } from '../../utils/imageUtils';
 import {
   saveSpecimenReceipts,
   loadSpecimenReceipts,
@@ -19,7 +19,10 @@ import {
 } from '../../utils/storageUtils';
 import SpecimenPreviewModal from './components/SpecimenPreviewModal';
 import ImagePreviewModal from '../../components/ImagePreviewModal';
+import ImageInfoModal from '../../components/ImageInfoModal';
 import WatermarkImage from '../../components/WatermarkImage';
+import SimpleCameraScreen from './components/SimpleCameraScreen';
+import RNFS from 'react-native-fs';
 
 const ReceiptApproverScreen = ({ navigation }) => {
   const [customerReceipt, setCustomerReceipt] = useState(null);
@@ -33,6 +36,9 @@ const ReceiptApproverScreen = ({ navigation }) => {
   const [randomId, setRandomId] = useState(null);
   const [showWatermark, setShowWatermark] = useState(false);
   const [watermarkImageUri, setWatermarkImageUri] = useState(null);
+  const [showCamera, setShowCamera] = useState(false);
+  const [cameraType, setCameraType] = useState('customer'); // 'customer' or 'specimen'
+  const [infoData, setInfoData] = useState(null);
 
   // load specimen dari storage saat component mount
   useEffect(() => {
@@ -61,37 +67,56 @@ const ReceiptApproverScreen = ({ navigation }) => {
   }, [specimenReceipts, isLoadingStorage]);
 
   const handleTakeCustomerPhoto = async () => {
-    try {
-      setIsLoading(true);
-      const result = await takePhotoWithWatermark();
-      setCustomerReceipt(result);
-      setRandomId(result.randomId);
+    setCameraType('customer');
+    setShowCamera(true);
+  };
 
-      // jika watermark gagal, coba pendekatan alternatif
-      if (!result.hasWatermark) {
-        console.log('Watermark failed, trying alternative approach');
-        setWatermarkImageUri(result.uri);
+  const handleTakeSpecimenPhoto = async () => {
+    setCameraType('specimen');
+    setShowCamera(true);
+  };
+
+  const handleCameraCapture = async (image) => {
+    try {
+      setShowCamera(false);
+      setIsLoading(true);
+
+      console.log('Camera captured for type:', cameraType);
+
+      if (cameraType === 'customer') {
+        // untuk customer receipt dengan watermark
+        // generate random ID untuk watermark
+        const generatedId = Math.random().toString(36).substring(2, 10).toUpperCase();
+        setRandomId(generatedId);
+
+        // set gambar original untuk di-watermark
+        setWatermarkImageUri(image.uri);
         setShowWatermark(true);
+
+        // simpan gambar original dulu sementara
+        setCustomerReceipt({
+          uri: image.uri,
+          base64: null,
+          hasWatermark: false,
+        });
+      } else {
+        // untuk specimen receipt - langsung convert ke base64
+        const base64 = await RNFS.readFile(image.uri, 'base64');
+        setSpecimenReceipts(prev => [...prev, {
+          uri: image.uri,
+          base64: base64,
+        }]);
       }
     } catch (error) {
-      console.log('Take photo error:', error);
-      Alert.alert('Error', `Gagal mengambil foto: ${error.message}`);
+      console.log('Camera capture error:', error);
+      Alert.alert('Error', `Gagal memproses foto: ${error.message}`);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleTakeSpecimenPhoto = async () => {
-    try {
-      setIsLoading(true);
-      const result = await takePhotoAndConvert();
-      setSpecimenReceipts(prev => [...prev, result]);
-    } catch (error) {
-      console.log('Take photo error:', error);
-      Alert.alert('Error', `Gagal mengambil foto: ${error.message}`);
-    } finally {
-      setIsLoading(false);
-    }
+  const handleCameraCancel = () => {
+    setShowCamera(false);
   };
 
   const handleRemoveSpecimen = (index) => {
@@ -128,6 +153,36 @@ const ReceiptApproverScreen = ({ navigation }) => {
     setSelectedSpecimen(specimen);
     setSelectedSpecimenIndex(index);
     setPreviewModalVisible(true);
+
+    // set info data untuk specimen
+    if (specimen.uri) {
+      const getSpecimenInfo = async () => {
+        try {
+          // get image size
+          const imageSize = await new Promise((resolve, reject) => {
+            Image.getSize(specimen.uri, (width, height) => {
+              resolve({ width, height });
+            }, reject);
+          });
+
+          // get file size menggunakan RNFS
+          const fileInfo = await RNFS.stat(specimen.uri);
+          const fileSizeInMB = (fileInfo.size / 1024 / 1024).toFixed(2);
+
+          setInfoData({
+            title: `Informasi Specimen ${index + 1}`,
+            width: imageSize.width,
+            height: imageSize.height,
+            fileSize: fileSizeInMB,
+            hasWatermark: false,
+          });
+        } catch (error) {
+          console.error('Error getting specimen info:', error);
+        }
+      };
+
+      getSpecimenInfo();
+    }
   };
 
   const handleClosePreview = () => {
@@ -137,7 +192,40 @@ const ReceiptApproverScreen = ({ navigation }) => {
   };
 
   const handleCustomerImagePress = () => {
-    setCustomerPreviewModalVisible(true);
+    // prepare info data sebelum buka modal
+    if (customerReceipt && customerReceipt.uri) {
+      const getCustomerInfo = async () => {
+        try {
+          // get image size
+          const imageSize = await new Promise((resolve, reject) => {
+            Image.getSize(customerReceipt.uri, (width, height) => {
+              resolve({ width, height });
+            }, reject);
+          });
+
+          // get file size menggunakan RNFS
+          const fileInfo = await RNFS.stat(customerReceipt.uri);
+          const fileSizeInMB = (fileInfo.size / 1024 / 1024).toFixed(2);
+
+          setInfoData({
+            title: 'Informasi Receipt Customer',
+            width: imageSize.width,
+            height: imageSize.height,
+            fileSize: fileSizeInMB,
+            hasWatermark: customerReceipt.hasWatermark,
+            randomId: randomId,
+          });
+          setCustomerPreviewModalVisible(true);
+        } catch (error) {
+          console.error('Error getting customer receipt info:', error);
+          setCustomerPreviewModalVisible(true);
+        }
+      };
+
+      getCustomerInfo();
+    } else {
+      setCustomerPreviewModalVisible(true);
+    }
   };
 
   const handleCloseCustomerPreview = () => {
@@ -176,33 +264,75 @@ const ReceiptApproverScreen = ({ navigation }) => {
   };
 
   const handleWatermarkCapture = async (watermarkedUri) => {
+    console.log('handleWatermarkCapture called with URI:', watermarkedUri);
+
     if (watermarkedUri) {
       console.log('Watermark captured successfully:', watermarkedUri);
 
       try {
-        // import convertImageToBase64 untuk convert watermarked image ke base64
-        const { convertImageToBase64 } = require('../../utils/imageUtils');
-        const watermarkedBase64 = await convertImageToBase64(watermarkedUri);
-        console.log('Watermarked image converted to base64');
+        setIsLoading(true);
 
-        setCustomerReceipt(prev => ({
-          ...prev,
+        // convert watermarked image ke base64
+        const watermarkedBase64 = await RNFS.readFile(watermarkedUri, 'base64');
+        console.log('Watermarked image converted to base64, length:', watermarkedBase64.length);
+
+        setCustomerReceipt({
           uri: watermarkedUri,
-          base64: watermarkedBase64, // update base64 dengan yang sudah ada watermark
+          base64: watermarkedBase64,
           hasWatermark: true
-        }));
+        });
+
+        console.log('Customer receipt updated with watermarked image');
       } catch (error) {
         console.error('Error converting watermarked image to base64:', error);
-        // fallback: tetap update URI saja
-        setCustomerReceipt(prev => ({
-          ...prev,
-          uri: watermarkedUri,
-          hasWatermark: true
-        }));
+
+        // fallback: gunakan gambar original dan convert ke base64
+        try {
+          const originalBase64 = await RNFS.readFile(watermarkImageUri, 'base64');
+          setCustomerReceipt({
+            uri: watermarkImageUri,
+            base64: originalBase64,
+            hasWatermark: false
+          });
+          console.log('Fallback: using original image without watermark');
+        } catch (fallbackError) {
+          console.error('Fallback also failed:', fallbackError);
+          Alert.alert('Error', 'Gagal memproses gambar');
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      console.log('Watermark capture returned null or undefined, using original image');
+
+      // fallback: gunakan gambar original tanpa watermark
+      try {
+        setIsLoading(true);
+        const originalBase64 = await RNFS.readFile(watermarkImageUri, 'base64');
+        setCustomerReceipt({
+          uri: watermarkImageUri,
+          base64: originalBase64,
+          hasWatermark: false
+        });
+      } catch (error) {
+        console.error('Error in fallback:', error);
+        Alert.alert('Error', 'Gagal memproses gambar');
+      } finally {
+        setIsLoading(false);
       }
     }
+
     setShowWatermark(false);
   };
+
+  if (showCamera) {
+    return (
+      <SimpleCameraScreen
+        onTakePhoto={handleCameraCapture}
+        onCancel={handleCameraCancel}
+      />
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -336,14 +466,7 @@ const ReceiptApproverScreen = ({ navigation }) => {
         )}
       </ScrollView>
 
-      {/* Specimen Preview Modal */}
-      <SpecimenPreviewModal
-        visible={previewModalVisible}
-        onClose={handleClosePreview}
-        specimen={selectedSpecimen}
-        index={selectedSpecimenIndex}
-        totalCount={specimenReceipts.length}
-      />
+
 
       {/* Customer Receipt Preview Modal */}
       <ImagePreviewModal
@@ -351,16 +474,29 @@ const ReceiptApproverScreen = ({ navigation }) => {
         onClose={handleCloseCustomerPreview}
         imageUri={customerReceipt?.uri}
         title="Preview Receipt Customer"
+        infoData={infoData}
+      />
+
+      {/* Specimen Preview Modal dengan Info */}
+      <SpecimenPreviewModal
+        visible={previewModalVisible}
+        onClose={handleClosePreview}
+        specimen={selectedSpecimen}
+        index={selectedSpecimenIndex}
+        totalCount={specimenReceipts.length}
+        infoData={infoData}
       />
 
       {/* Watermark Component */}
-      {showWatermark && watermarkImageUri && (
+      {showWatermark && watermarkImageUri && randomId && (
         <WatermarkImage
           imageUri={watermarkImageUri}
           watermarkText={randomId}
           onCapture={handleWatermarkCapture}
         />
       )}
+
+
     </SafeAreaView>
   );
 };

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
     Modal,
     View,
@@ -8,6 +8,7 @@ import {
     SafeAreaView,
 } from 'react-native';
 import ImageViewer from 'react-native-image-zoom-viewer';
+import ImageInfoModal from './ImageInfoModal';
 
 const ImagePreviewModal = ({
     visible,
@@ -15,8 +16,10 @@ const ImagePreviewModal = ({
     imageUri,
     title = 'Preview Gambar',
     showHeader = true,
-    showFooter = true
+    showFooter = true,
+    infoData = null,
 }) => {
+    const [showInfoModal, setShowInfoModal] = useState(false);
     if (!imageUri) return null;
 
     const images = [{
@@ -40,7 +43,16 @@ const ImagePreviewModal = ({
                             <Text style={styles.closeButtonText}>✕</Text>
                         </TouchableOpacity>
                         <Text style={styles.headerTitle}>{title}</Text>
-                        <View style={styles.placeholder} />
+                        {infoData ? (
+                            <TouchableOpacity 
+                                style={styles.infoButton} 
+                                onPress={() => setShowInfoModal(true)}
+                            >
+                                <Text style={styles.infoButtonText}>ℹ️</Text>
+                            </TouchableOpacity>
+                        ) : (
+                            <View style={styles.placeholder} />
+                        )}
                     </View>
                 )}
 
@@ -63,6 +75,13 @@ const ImagePreviewModal = ({
                         </TouchableOpacity>
                     </View>
                 )}
+
+                {/* Info Modal */}
+                <ImageInfoModal
+                    visible={showInfoModal}
+                    onClose={() => setShowInfoModal(false)}
+                    infoData={infoData}
+                />
             </SafeAreaView>
         </Modal>
     );
@@ -101,6 +120,17 @@ const styles = StyleSheet.create({
     },
     placeholder: {
         width: 40,
+    },
+    infoButton: {
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        borderRadius: 20,
+        width: 40,
+        height: 40,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    infoButtonText: {
+        fontSize: 20,
     },
     imageContainer: {
         flex: 1,

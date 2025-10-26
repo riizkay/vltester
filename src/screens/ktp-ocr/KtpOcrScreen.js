@@ -8,32 +8,124 @@ import {
   Image,
   Alert,
   ActivityIndicator,
+  Dimensions,
 } from 'react-native';
 import { takePhotoWithBase64 } from '../../utils/imageUtils';
 import ImagePreviewModal from '../../components/ImagePreviewModal';
+import CameraScreen from './components/CameraScreen';
+import { processKtpImage } from '../../utils/imageCropUtils';
+import RNFS from 'react-native-fs';
+import { loadSettings } from '../../utils/settingsUtils';
+import CroppedImageView from '../../components/CroppedImageView';
 
 const KtpOcrScreen = ({ navigation }) => {
   const [imageData, setImageData] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const [previewModalVisible, setPreviewModalVisible] = useState(false);
+  const [showCamera, setShowCamera] = useState(false);
+  const [infoData, setInfoData] = useState(null);
+  const [showCropper, setShowCropper] = useState(false);
+  const [originalImageUri, setOriginalImageUri] = useState(null);
+  const [cropParams, setCropParams] = useState(null);
 
   const handleTakePhoto = async () => {
-    try {
-      setIsLoading(true);
-      const result = await takePhotoWithBase64();
-      setImageData(result);
+    setShowCamera(true);
+  };
 
-      // log info kompresi untuk debugging
-      if (result.compressionInfo) {
-        console.log('Compression info:', result.compressionInfo);
-        console.log(`File size reduced by ${result.compressionInfo.compressionRatio}%`);
+  const handleCameraCapture = async (image) => {
+    try {
+      console.log('handleCameraCapture - received image:', JSON.stringify(image, null, 2));
+
+      if (!image || !image.uri) {
+        console.error('Invalid image data:', image);
+        throw new Error('Image URI kosong');
       }
+
+      setShowCamera(false);
+      setIsLoading(true);
+
+      console.log('Processing image URI:', image.uri);
+
+      // Get image dimensions
+      const imageSize = await new Promise((resolve, reject) => {
+        Image.getSize(image.uri, (width, height) => {
+          resolve({ width, height });
+        }, reject);
+      });
+
+      console.log('Original image size:', imageSize);
+
+      // Calculate crop parameters
+      const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+      const KTP_MASK_WIDTH = SCREEN_WIDTH * 0.9;
+      const KTP_MASK_HEIGHT = KTP_MASK_WIDTH * 0.63;
+      const MASK_LEFT = (SCREEN_WIDTH - KTP_MASK_WIDTH) / 2;
+      const MASK_TOP = (SCREEN_HEIGHT - KTP_MASK_HEIGHT) / 2;
+
+      const scaleX = imageSize.width / SCREEN_WIDTH;
+      const scaleY = imageSize.height / SCREEN_HEIGHT;
+
+      const cropX = Math.max(0, Math.floor(MASK_LEFT * scaleX));
+      const cropY = Math.max(0, Math.floor(MASK_TOP * scaleY));
+      const cropWidth = Math.floor(KTP_MASK_WIDTH * scaleX);
+      const cropHeight = Math.floor(KTP_MASK_HEIGHT * scaleY);
+
+      console.log('Crop params calculated:', { cropX, cropY, cropWidth, cropHeight });
+
+      // Set crop params and show cropper
+      setOriginalImageUri(image.uri);
+      setCropParams({
+        cropX,
+        cropY,
+        cropWidth,
+        cropHeight,
+        imageWidth: imageSize.width,
+        imageHeight: imageSize.height
+      });
+      setShowCropper(true);
+      setIsLoading(false);
     } catch (error) {
-      console.log('Take photo error:', error);
-      Alert.alert('Error', `Gagal mengambil foto: ${error.message}`);
-    } finally {
+      console.log('Camera capture error:', error);
+      Alert.alert('Error', `Gagal memproses foto: ${error.message}`);
       setIsLoading(false);
     }
+  };
+
+  const handleCroppedImageCapture = async (croppedUri) => {
+    console.log('handleCroppedImageCapture called with URI:', croppedUri);
+
+    if (croppedUri) {
+      try {
+        setShowCropper(false);
+        setIsLoading(true);
+
+        // Process the cropped image (resize for OCR)
+        const { processKtpImage } = require('../../utils/imageCropUtils');
+        const processedUri = await processKtpImage(croppedUri);
+
+        console.log('Processed cropped URI:', processedUri);
+
+        // convert ke base64 untuk OCR
+        const base64 = await RNFS.readFile(processedUri, 'base64');
+
+        console.log('Base64 length:', base64.length);
+
+        setImageData({
+          uri: processedUri,
+          base64: base64,
+          compressionInfo: null,
+        });
+      } catch (error) {
+        console.error('Error processing cropped image:', error);
+        Alert.alert('Error', 'Gagal memproses gambar yang di-crop');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+  };
+
+  const handleCameraCancel = () => {
+    setShowCamera(false);
   };
 
   const handleProcessOcr = () => {
@@ -59,12 +151,53 @@ const KtpOcrScreen = ({ navigation }) => {
   };
 
   const handleImagePress = () => {
-    setPreviewModalVisible(true);
+    // prepare info data sebelum buka modal
+    if (imageData && imageData.uri) {
+      const getImageInfo = async () => {
+        try {
+          // get image size
+          const imageSize = await new Promise((resolve, reject) => {
+            Image.getSize(imageData.uri, (width, height) => {
+              resolve({ width, height });
+            }, reject);
+          });
+
+          // get file size menggunakan RNFS
+          const fileInfo = await RNFS.stat(imageData.uri);
+          const fileSizeInMB = (fileInfo.size / 1024 / 1024).toFixed(2);
+
+          setInfoData({
+            title: 'Informasi KTP',
+            width: imageSize.width,
+            height: imageSize.height,
+            fileSize: fileSizeInMB,
+            hasWatermark: false,
+          });
+          setPreviewModalVisible(true);
+        } catch (error) {
+          console.error('Error getting image info:', error);
+          setPreviewModalVisible(true);
+        }
+      };
+
+      getImageInfo();
+    } else {
+      setPreviewModalVisible(true);
+    }
   };
 
   const handleClosePreview = () => {
     setPreviewModalVisible(false);
   };
+
+  if (showCamera) {
+    return (
+      <CameraScreen
+        onTakePhoto={handleCameraCapture}
+        onCancel={handleCameraCancel}
+      />
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -127,7 +260,17 @@ const KtpOcrScreen = ({ navigation }) => {
         onClose={handleClosePreview}
         imageUri={imageData?.uri}
         title="Preview KTP"
+        infoData={infoData}
       />
+
+      {/* Cropped Image View - Invisible ViewShot Component */}
+      {showCropper && originalImageUri && cropParams && (
+        <CroppedImageView
+          imageUri={originalImageUri}
+          cropParams={cropParams}
+          onCapture={handleCroppedImageCapture}
+        />
+      )}
     </SafeAreaView>
   );
 };

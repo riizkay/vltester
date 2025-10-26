@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
     Modal,
     View,
@@ -9,10 +9,12 @@ import {
     Dimensions,
 } from 'react-native';
 import ImageViewer from 'react-native-image-zoom-viewer';
+import ImageInfoModal from '../../../components/ImageInfoModal';
 
 const { width, height } = Dimensions.get('window');
 
-const SpecimenPreviewModal = ({ visible, onClose, specimen, index, totalCount }) => {
+const SpecimenPreviewModal = ({ visible, onClose, specimen, index, totalCount, infoData = null }) => {
+    const [showInfoModal, setShowInfoModal] = useState(false);
     if (!specimen) return null;
 
     const images = [{
@@ -37,7 +39,16 @@ const SpecimenPreviewModal = ({ visible, onClose, specimen, index, totalCount })
                     <Text style={styles.headerTitle}>
                         Specimen {index + 1} dari {totalCount}
                     </Text>
-                    <View style={styles.placeholder} />
+                    {infoData ? (
+                        <TouchableOpacity 
+                            style={styles.infoButton} 
+                            onPress={() => setShowInfoModal(true)}
+                        >
+                            <Text style={styles.infoButtonText}>ℹ️</Text>
+                        </TouchableOpacity>
+                    ) : (
+                        <View style={styles.placeholder} />
+                    )}
                 </View>
 
                 <View style={styles.imageContainer}>
@@ -57,6 +68,13 @@ const SpecimenPreviewModal = ({ visible, onClose, specimen, index, totalCount })
                         <Text style={styles.actionButtonText}>Tutup</Text>
                     </TouchableOpacity>
                 </View>
+
+                {/* Info Modal */}
+                <ImageInfoModal
+                    visible={showInfoModal}
+                    onClose={() => setShowInfoModal(false)}
+                    infoData={infoData}
+                />
             </SafeAreaView>
         </Modal>
     );
@@ -95,6 +113,17 @@ const styles = StyleSheet.create({
     },
     placeholder: {
         width: 40,
+    },
+    infoButton: {
+        backgroundColor: 'rgba(255,255,255,0.2)',
+        borderRadius: 20,
+        width: 40,
+        height: 40,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    infoButtonText: {
+        fontSize: 20,
     },
     imageContainer: {
         flex: 1,
